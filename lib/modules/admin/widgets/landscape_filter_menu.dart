@@ -6,9 +6,15 @@ class LandscapeFilterMenu extends StatelessWidget {
   const LandscapeFilterMenu({
     super.key,
     required this.child,
+    this.label = 'Filter',
+    this.tooltip = 'Filter anomalies',
+    this.activeCount = 0,
   });
 
   final Widget child;
+  final String label;
+  final String tooltip;
+  final int activeCount;
 
   @override
   Widget build(BuildContext context) {
@@ -22,7 +28,7 @@ class LandscapeFilterMenu extends StatelessWidget {
         Builder(
           builder: (context) {
             final maxHeight =
-                (MediaQuery.sizeOf(context).height - 32).clamp(200.0, 360.0);
+                (MediaQuery.sizeOf(context).height * 0.58).clamp(220.0, 300.0);
             return SizedBox(
               width: 360,
               height: maxHeight,
@@ -36,11 +42,37 @@ class LandscapeFilterMenu extends StatelessWidget {
         ),
       ],
       builder: (context, controller, _) => Tooltip(
-        message: 'Filter anomalies',
+        message: tooltip,
         child: TextButton.icon(
           onPressed: controller.isOpen ? controller.close : controller.open,
           icon: const Icon(Icons.tune, size: 18),
-          label: const Text('Filter'),
+          label: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(label),
+              if (activeCount > 0) ...[
+                const SizedBox(width: 6),
+                Container(
+                  constraints: const BoxConstraints(minWidth: 18),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                  decoration: BoxDecoration(
+                    color: AppColors.adminPrimary,
+                    borderRadius: BorderRadius.circular(99),
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    '$activeCount',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
           style: TextButton.styleFrom(
             foregroundColor: AppColors.adminPrimary,
             backgroundColor: AppColors.adminSurface,
