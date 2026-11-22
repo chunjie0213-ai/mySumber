@@ -1,0 +1,79 @@
+name: Sync upstream main
+
+on:
+  schedule:
+    - cron: '39 2 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: sync-upstream-main
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    if: github.repository == 'chunjie0213-ai/mySumber' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: refs/heads/main
+          fetch-depth: 0
+          token: ${{ secrets.SYNC_PAT || github.token }}
+
+      - name: Sync snapshot from upstream main
+        shell: bash
+        env:
+          UPSTREAM_URL: https://github.com/TanZhengYang0912/mySumber.git
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git fetch --no-tags --depth=1 "$UPSTREAM_URL" main
+          upstream_sha="$(git rev-parse FETCH_HEAD)"
+          last_sha="$(cat .github/LAST_UPSTREAM_SHA 2>/dev/null || true)"
+
+          if [[ "$upstream_sha" == "$last_sha" ]]; then
+            echo "Already up to date with upstream main ($upstream_sha)."
+            exit 0
+          fi
+
+          # Snapshot sync avoids re-importing scrubbed legacy secret blobs from upstream history
+          git rm -rf --quiet .
+          git checkout FETCH_HEAD -- .
+          git rm -rf --ignore-unmatch .github/workflows
+          git checkout HEAD -- .github/workflows .github/PORTFOLIO_HEADER.md
+          printf '%s\n' "$upstream_sha" > .github/LAST_UPSTREAM_SHA
+
+          python3 - <<'PY'
+          import os, re
+
+          header_path = ".github/PORTFOLIO_HEADER.md"
+          readme_path = "README.md"
+          if os.path.exists(header_path) and os.path.exists(readme_path):
+              header = open(header_path, encoding="utf-8").read().strip()
+              readme = open(readme_path, encoding="utf-8").read()
+              readme = re.sub(
+                  r"<!-- PORTFOLIO-HEADER:START -->.*?<!-- PORTFOLIO-HEADER:END -->\s*",
+                  "",
+                  readme,
+                  flags=re.S,
+              )
+              merged = f"<!-- PORTFOLIO-HEADER:START -->\n{header}\n<!-- PORTFOLIO-HEADER:END -->\n\n{readme.lstrip()}"
+              with open(readme_path, "w", encoding="utf-8") as f:
+                  f.write(merged)
+          PY
+
+          git add -A
+          if git diff --cached --quiet; then
+            echo "Nothing to commit after sync."
+            exit 0
+          fi
+
+          short_sha="${upstream_sha:0:8}"
+          git commit -m "chore(sync): sync upstream main ($short_sha)"
+          git push origin HEAD:refs/heads/main
